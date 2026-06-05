@@ -1,0 +1,30 @@
+# Credenciales y configuración local
+.env
+credentials.json
+token.json
+
+# Respaldos generados al reparar fórmulas
+backup_*.json
+
+# Imágenes procesadas
+**/Procesadas/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Logs
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db

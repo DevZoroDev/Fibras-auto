@@ -1,0 +1,172 @@
+name: Build Windows portable
+
+# Genera un .exe portable de Windows (todo embebido, incluido Tesseract OCR).
+# Se ejecuta:
+#   - Al pulsar "Run workflow" desde la pestaña Actions de GitHub.
+#   - Automáticamente en cada push a main que toque el código de la app.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'fibra_app/**'
+      - 'run.py'
+      - 'requirements.txt'
+      - '.github/workflows/build-windows.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      # ---------------------------------------------------------------
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # ---------------------------------------------------------------
+      # Tesseract OCR portable: usar el binario ya instalado en el runner.
+      # Los runners de GitHub Actions traen Tesseract preinstalado con
+      # múltiples idiomas (incluido español), por lo que solo lo copiamos.
+      - name: Localizar Tesseract instalado en el runner
+        id: tess
+        shell: pwsh
+        run: |
+          $cmd = Get-Command tesseract -ErrorAction SilentlyContinue
+          if (-not $cmd) {
+            Write-Host "Tesseract no está en PATH; instalando con choco..."
+            choco install tesseract -y --no-progress
+            $cmd = Get-Command tesseract -ErrorAction Stop
+          }
+          $tessExe = $cmd.Source
+          $tessDir = Split-Path -Parent $tessExe
+          Write-Host "Tesseract en: $tessDir"
+          "tess_dir=$tessDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Verificar idioma español
+        shell: pwsh
+        run: |
+          $langs = & "${{ steps.tess.outputs.tess_dir }}\tesseract.exe" --list-langs 2>&1
+          Write-Host $langs
+          if (-not ($langs -match 'spa')) {
+            Write-Error "El runner no tiene el idioma 'spa' para Tesseract."
+            exit 1
+          }
+
+      - name: Copiar Tesseract a la carpeta del proyecto
+        shell: pwsh
+        run: |
+          $src = "${{ steps.tess.outputs.tess_dir }}"
+          $dst = Join-Path $PWD "tesseract"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          # Copiar binarios y dependencias (DLLs)
+          Copy-Item "$src\*.exe" $dst -Force
+          Copy-Item "$src\*.dll" $dst -Force -ErrorAction SilentlyContinue
+          # tessdata puede estar como subcarpeta o como variable de entorno.
+          $tessdata = $env:TESSDATA_PREFIX
+          if (-not $tessdata -or -not (Test-Path $tessdata)) {
+            $tessdata = Join-Path $src "tessdata"
+          }
+          if (Test-Path $tessdata) {
+            New-Item -ItemType Directory -Force -Path "$dst\tessdata" | Out-Null
+            # Copiar solo idiomas necesarios para reducir tamaño.
+            foreach ($f in @('spa.traineddata','eng.traineddata','osd.traineddata')) {
+              $p = Join-Path $tessdata $f
+              if (Test-Path $p) { Copy-Item $p "$dst\tessdata\" -Force }
+            }
+          } else {
+            Write-Error "No se encontraron tessdata en $src"
+            exit 1
+          }
+          Write-Host "Contenido tesseract/:"
+          Get-ChildItem $dst -Recurse | Select-Object FullName, Length
+
+      # ---------------------------------------------------------------
+      - name: Instalar dependencias Python
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ---------------------------------------------------------------
+      - name: Empaquetar con PyInstaller
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --noconfirm `
+            --clean `
+            --windowed `
+            --name "SolicitudesFibra" `
+            --collect-data customtkinter `
+            --collect-submodules google `
+            --add-data "tesseract;tesseract" `
+            --add-data "ejecutivos.json;." `
+            --add-data ".env.example;." `
+            run.py
+
+      # ---------------------------------------------------------------
+      - name: Copiar archivos de configuración junto al .exe
+        shell: pwsh
+        run: |
+          $dest = "dist\SolicitudesFibra"
+          # ejecutivos.json: si no lo tomó PyInstaller, copiar al lado del exe
+          if (Test-Path "ejecutivos.json") {
+            Copy-Item "ejecutivos.json" $dest -Force
+          }
+          # Crear un .env de plantilla (sin secretos) para que el usuario edite
+          if (Test-Path ".env.example") {
+            Copy-Item ".env.example" "$dest\.env" -Force
+          }
+          # README específico de la versión portable
+          @"
+SolicitudesFibra - Versión portable Windows
+============================================
+
+Esta carpeta es portable: cópiala donde quieras y ejecuta SolicitudesFibra.exe.
+
+PRIMER USO:
+  1. Edita el archivo .env y completa GOOGLE_SHEET_ID con el ID de tu planilla.
+  2. Coloca tu archivo credentials.json (OAuth de Google) en esta misma carpeta.
+  3. Edita ejecutivos.json para definir tu lista de ejecutivos.
+  4. Ejecuta SolicitudesFibra.exe. La primera vez se abrirá el navegador para
+     iniciar sesión con tu cuenta de Google.
+
+NO necesitas instalar Tesseract: ya viene incluido en la subcarpeta tesseract\.
+
+Si quieres mover la sesión de Google de un PC a otro, copia también token.json.
+"@ | Out-File -FilePath "$dest\LEEME.txt" -Encoding utf8
+
+      - name: Comprimir carpeta portable en ZIP
+        shell: pwsh
+        run: |
+          $version = "$(Get-Date -Format yyyy-MM-dd)-${{ github.run_number }}"
+          $zip = "SolicitudesFibra-Windows-$version.zip"
+          Compress-Archive -Path "dist\SolicitudesFibra\*" -DestinationPath $zip -CompressionLevel Optimal
+          Write-Host "ZIP creado: $zip"
+          "zip_name=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        id: zip
+
+      # ---------------------------------------------------------------
+      - name: Publicar artefacto descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolicitudesFibra-Windows
+          path: ${{ steps.zip.outputs.zip_name }}
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Resumen
+        shell: pwsh
+        run: |
+          $size = (Get-Item "${{ steps.zip.outputs.zip_name }}").Length / 1MB
+          Write-Host "Tamaño del ZIP: $([math]::Round($size,1)) MB"
+          Write-Host ""
+          Write-Host "Listo. Ve a la pestaña Actions de GitHub, abre esta corrida"
+          Write-Host "y descarga el artefacto 'SolicitudesFibra-Windows'."
