@@ -33,59 +33,45 @@ jobs:
 
       # ---------------------------------------------------------------
       # Tesseract OCR portable: usar el binario ya instalado en el runner.
-      # Los runners de GitHub Actions traen Tesseract preinstalado con
-      # múltiples idiomas (incluido español), por lo que solo lo copiamos.
-      - name: Localizar Tesseract instalado en el runner
-        id: tess
+      # Instala Tesseract con Chocolatey y arma una carpeta portable propia
+      # (tesseract.exe + DLLs + idiomas spa/eng/osd descargados explícitamente).
+      # Se usan rutas absolutas porque el PATH no se refresca tras choco install.
+      - name: Preparar Tesseract portable
         shell: pwsh
         run: |
-          $cmd = Get-Command tesseract -ErrorAction SilentlyContinue
-          if (-not $cmd) {
-            Write-Host "Tesseract no está en PATH; instalando con choco..."
-            choco install tesseract -y --no-progress
-            $cmd = Get-Command tesseract -ErrorAction Stop
-          }
-          $tessExe = $cmd.Source
-          $tessDir = Split-Path -Parent $tessExe
-          Write-Host "Tesseract en: $tessDir"
-          "tess_dir=$tessDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          $ErrorActionPreference = "Stop"
+          Write-Host "Instalando Tesseract con Chocolatey..."
+          choco install tesseract -y --no-progress
 
-      - name: Verificar idioma español
-        shell: pwsh
-        run: |
-          $langs = & "${{ steps.tess.outputs.tess_dir }}\tesseract.exe" --list-langs 2>&1
+          $tessRoot = "C:\Program Files\Tesseract-OCR"
+          if (-not (Test-Path "$tessRoot\tesseract.exe")) {
+            Write-Error "No se encontró tesseract.exe en $tessRoot tras la instalación."
+            exit 1
+          }
+
+          # Carpeta portable local que se empaquetará dentro del .exe
+          $dst = Join-Path $PWD "tesseract"
+          New-Item -ItemType Directory -Force -Path "$dst\tessdata" | Out-Null
+          Copy-Item "$tessRoot\*.exe" $dst -Force
+          Copy-Item "$tessRoot\*.dll" $dst -Force -ErrorAction SilentlyContinue
+
+          # Descargar idiomas necesarios desde el repo oficial (estándar).
+          $base = "https://github.com/tesseract-ocr/tessdata/raw/main"
+          foreach ($l in @('spa','eng','osd')) {
+            Write-Host "Descargando $l.traineddata..."
+            Invoke-WebRequest -Uri "$base/$l.traineddata" `
+              -OutFile "$dst\tessdata\$l.traineddata"
+          }
+
+          # Verificar que el binario portable reconoce el español.
+          $langs = & "$dst\tesseract.exe" --tessdata-dir "$dst\tessdata" --list-langs 2>&1
+          Write-Host "Idiomas disponibles:"
           Write-Host $langs
           if (-not ($langs -match 'spa')) {
-            Write-Error "El runner no tiene el idioma 'spa' para Tesseract."
+            Write-Error "El Tesseract portable no reconoce el idioma 'spa'."
             exit 1
           }
-
-      - name: Copiar Tesseract a la carpeta del proyecto
-        shell: pwsh
-        run: |
-          $src = "${{ steps.tess.outputs.tess_dir }}"
-          $dst = Join-Path $PWD "tesseract"
-          New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          # Copiar binarios y dependencias (DLLs)
-          Copy-Item "$src\*.exe" $dst -Force
-          Copy-Item "$src\*.dll" $dst -Force -ErrorAction SilentlyContinue
-          # tessdata puede estar como subcarpeta o como variable de entorno.
-          $tessdata = $env:TESSDATA_PREFIX
-          if (-not $tessdata -or -not (Test-Path $tessdata)) {
-            $tessdata = Join-Path $src "tessdata"
-          }
-          if (Test-Path $tessdata) {
-            New-Item -ItemType Directory -Force -Path "$dst\tessdata" | Out-Null
-            # Copiar solo idiomas necesarios para reducir tamaño.
-            foreach ($f in @('spa.traineddata','eng.traineddata','osd.traineddata')) {
-              $p = Join-Path $tessdata $f
-              if (Test-Path $p) { Copy-Item $p "$dst\tessdata\" -Force }
-            }
-          } else {
-            Write-Error "No se encontraron tessdata en $src"
-            exit 1
-          }
-          Write-Host "Contenido tesseract/:"
+          Write-Host "Tesseract portable listo en: $dst"
           Get-ChildItem $dst -Recurse | Select-Object FullName, Length
 
       # ---------------------------------------------------------------
