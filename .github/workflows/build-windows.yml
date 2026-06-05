@@ -125,23 +125,7 @@ jobs:
             Copy-Item ".env.example" "$dest\.env" -Force
           }
           # README específico de la versión portable
-          @"
-SolicitudesFibra - Versión portable Windows
-============================================
-
-Esta carpeta es portable: cópiala donde quieras y ejecuta SolicitudesFibra.exe.
-
-PRIMER USO:
-  1. Edita el archivo .env y completa GOOGLE_SHEET_ID con el ID de tu planilla.
-  2. Coloca tu archivo credentials.json (OAuth de Google) en esta misma carpeta.
-  3. Edita ejecutivos.json para definir tu lista de ejecutivos.
-  4. Ejecuta SolicitudesFibra.exe. La primera vez se abrirá el navegador para
-     iniciar sesión con tu cuenta de Google.
-
-NO necesitas instalar Tesseract: ya viene incluido en la subcarpeta tesseract\.
-
-Si quieres mover la sesión de Google de un PC a otro, copia también token.json.
-"@ | Out-File -FilePath "$dest\LEEME.txt" -Encoding utf8
+          Copy-Item "packaging\LEEME.txt" "$dest\LEEME.txt" -Force
 
       - name: Comprimir carpeta portable en ZIP
         shell: pwsh
