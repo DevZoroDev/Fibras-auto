@@ -75,6 +75,29 @@ def test_emparejar_por_rut():
     assert parsers.rut_digitos("10.994.246-4") == parsers.rut_digitos("10994246-4")
 
 
+def test_rut_valido():
+    # RUTs reales (dígito verificador correcto)
+    assert parsers.rut_valido("10.994.246-4")
+    assert parsers.rut_valido("14.105.611-5")
+    assert parsers.rut_valido("12899407-6")  # sin puntos
+    # DV incorrecto / basura
+    assert not parsers.rut_valido("10.994.246-9")
+    assert not parsers.rut_valido("")
+    assert not parsers.rut_valido("123")
+
+
+def test_elegir_rut_entre_dos_imagenes():
+    from fibra_app.core.processor import _elegir_rut
+    # 1ª imagen sin RUT -> usa el de la 2ª
+    assert _elegir_rut("", "14.105.611-5") == "14.105.611-5"
+    # 1ª imagen con RUT inválido -> prefiere el válido de la 2ª
+    assert _elegir_rut("10.994.246-9", "14.105.611-5") == "14.105.611-5"
+    # ambos válidos -> mantiene el de la orden (1ª)
+    assert _elegir_rut("10.994.246-4", "14.105.611-5") == "10.994.246-4"
+    # solo la orden -> ese
+    assert _elegir_rut("14.105.611-5", "") == "14.105.611-5"
+
+
 # Texto OCR REAL (con ruido del menú lateral y errores típicos de Tesseract).
 TEXTO_ORDEN_RUIDO = """\
 7% 15:27 mar,2jun AB y - 200)

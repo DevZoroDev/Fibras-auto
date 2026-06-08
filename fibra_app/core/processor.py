@@ -144,11 +144,12 @@ def _armar_solicitud(
 ) -> Solicitud:
     """Combina los campos extraídos de ambas capturas en una Solicitud."""
     sol = Solicitud()
+    rut_orden = rut_agenda = ""
     if cap_orden:
         datos = parsers.parse_orden(cap_orden.texto)
         sol.orden = datos["orden"]
         sol.nombre = datos["nombre"]
-        sol.rut = datos["rut"]
+        rut_orden = datos["rut"]
         sol.fecha_venta = datos["fecha_venta"]
         sol.imagenes.append(cap_orden.path)
     if cap_agenda:
@@ -157,14 +158,35 @@ def _armar_solicitud(
         sol.fecha_agenda = datos["fecha_agenda"]
         sol.contacto = datos["contacto"]
         sol.franja = datos["franja"]
+        rut_agenda = datos["rut"]
         sol.imagenes.append(cap_agenda.path)
-        # Completar nombre/RUT si la captura de orden no los detectó.
-        if not sol.rut:
-            sol.rut = datos["rut"]
         if not sol.nombre:
             sol.nombre = datos["nombre"]
+
+    # El RUT del cliente aparece en AMBAS capturas: se combinan y se prefiere
+    # el que tenga dígito verificador válido (si la 1ª imagen falla, usa la 2ª).
+    sol.rut = _elegir_rut(rut_orden, rut_agenda)
 
     sol.advertencias = [
         f"Campo '{c}' no detectado" for c in sol.campos_faltantes()
     ]
     return sol
+
+
+def _elegir_rut(rut_orden: str, rut_agenda: str) -> str:
+    """Elige el mejor RUT entre las dos capturas.
+
+    Prioridad: un RUT con dígito verificador válido (primero el de la orden,
+    luego el de agendamiento). Si ninguno valida, devuelve el primero detectado.
+    """
+    candidatos = [r for r in (rut_orden, rut_agenda) if r]
+    for r in candidatos:
+        if parsers.rut_valido(r):
+            if r == rut_agenda and rut_orden != rut_agenda:
+                logger.info("RUT tomado de la 2ª imagen (agendamiento): %s", r)
+            return r
+    if candidatos:
+        logger.warning("Ningún RUT validó el dígito verificador; uso %s",
+                       candidatos[0])
+        return candidatos[0]
+    return ""

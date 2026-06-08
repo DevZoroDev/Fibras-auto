@@ -78,6 +78,31 @@ def rut_digitos(raw: str | None) -> str:
     return re.sub(r"[^\dkK]", "", base).upper()
 
 
+def _dv_esperado(cuerpo: int) -> str:
+    """Calcula el dígito verificador de un RUT chileno (módulo 11)."""
+    suma, mult = 0, 2
+    for d in reversed(str(cuerpo)):
+        suma += int(d) * mult
+        mult = 2 if mult == 7 else mult + 1
+    resto = 11 - (suma % 11)
+    if resto == 11:
+        return "0"
+    if resto == 10:
+        return "K"
+    return str(resto)
+
+
+def rut_valido(rut: str | None) -> bool:
+    """Indica si un RUT (en cualquier formato) tiene dígito verificador correcto."""
+    limpio = re.sub(r"[^\dkK]", "", (rut or "")).upper()
+    if len(limpio) < 7:  # un RUT real tiene al menos 7 caracteres
+        return False
+    cuerpo, dv = limpio[:-1], limpio[-1]
+    if not cuerpo.isdigit():
+        return False
+    return _dv_esperado(int(cuerpo)) == dv
+
+
 def normalizar_fecha(raw: str | None) -> str:
     """Devuelve la fecha como DD-MM-AAAA (asume siglo 20xx en años de 2 cifras)."""
     if not raw:
