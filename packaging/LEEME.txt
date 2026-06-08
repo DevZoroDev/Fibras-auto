@@ -1,15 +1,24 @@
 SolicitudesFibra - Versión portable Windows
 ============================================
 
-Esta carpeta es portable: cópiala donde quieras y ejecuta SolicitudesFibra.exe.
+Esta carpeta es portable. IMPORTANTE: primero DESCOMPRÍMELA (no ejecutes el
+programa desde dentro del ZIP), y déjala en una carpeta donde tengas permisos
+de escritura (por ejemplo el Escritorio o Documentos).
 
-PRIMER USO:
-  1. Edita el archivo .env y completa GOOGLE_SHEET_ID con el ID de tu planilla.
-  2. Coloca tu archivo credentials.json (OAuth de Google) en esta misma carpeta.
-  3. Edita ejecutivos.json para definir tu lista de ejecutivos.
-  4. Ejecuta SolicitudesFibra.exe. La primera vez se abrirá el navegador para
-     iniciar sesión con tu cuenta de Google.
+USO:
+  1. Ejecuta SolicitudesFibra.exe.
+  2. Selecciona la carpeta con las capturas, el ejecutivo y la ciudad.
+  3. Pulsa "Procesar Solicitudes" y revisa la tabla.
+  4. Pulsa "Enviar a Google Sheets".
 
-NO necesitas instalar Tesseract: ya viene incluido en la subcarpeta tesseract\.
+INICIO DE SESIÓN (solo la primera vez en este equipo):
+  Al conectar por primera vez se abrirá el navegador para que inicies sesión
+  con TU cuenta de Google. Cada persona usa su propia cuenta (queda registrada
+  como responsable de lo que carga). Si aparece "Google no verificó esta app",
+  pulsa "Configuración avanzada" y luego "Ir a ... (no seguro)". Después de la
+  primera vez ya no se vuelve a pedir en este equipo.
 
-Si quieres mover la sesión de Google de un PC a otro, copia también token.json.
+NO necesitas instalar nada más: Tesseract y las credenciales ya vienen incluidos.
+
+Para enlazar otra planilla o cambiar de cuenta de Google, usa el botón
+"Configuración" dentro de la aplicación.

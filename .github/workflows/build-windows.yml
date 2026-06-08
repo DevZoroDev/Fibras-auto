@@ -113,6 +113,30 @@ jobs:
           # README específico de la versión portable
           Copy-Item "packaging\LEEME.txt" "$dest\LEEME.txt" -Force
 
+      # El credentials.json (cliente OAuth de escritorio) se guarda como Secret
+      # del repositorio y se inyecta aquí, para que cada usuario solo deba
+      # iniciar sesión con su propio Gmail (no se incluye token.json).
+      - name: Inyectar credentials.json (OAuth)
+        shell: pwsh
+        env:
+          CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CREDENTIALS_JSON)) {
+            Write-Error ("Falta el Secret 'CREDENTIALS_JSON' en el repositorio. " +
+              "Agrégalo en Settings > Secrets and variables > Actions con el " +
+              "contenido de tu credentials.json.")
+            exit 1
+          }
+          $ruta = "dist\SolicitudesFibra\credentials.json"
+          [System.IO.File]::WriteAllText($ruta, $env:CREDENTIALS_JSON)
+          # Validar que sea JSON de cliente OAuth de escritorio.
+          $j = Get-Content $ruta -Raw | ConvertFrom-Json
+          if (-not $j.installed) {
+            Write-Error "El Secret CREDENTIALS_JSON no es un cliente OAuth de 'App de escritorio' (falta la clave 'installed')."
+            exit 1
+          }
+          Write-Host "credentials.json inyectado correctamente."
+
       - name: Comprimir carpeta portable en ZIP
         shell: pwsh
         run: |
