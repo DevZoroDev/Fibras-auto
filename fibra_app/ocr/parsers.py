@@ -129,22 +129,21 @@ def normalizar_franja(raw: str | None) -> str:
 
 
 def normalizar_telefono(raw: str | None) -> str:
-    """Devuelve el teléfono como +569XXXXXXXX."""
+    """Devuelve el teléfono SIN prefijo país: 9 dígitos, p.ej. '945794728'."""
     if not raw:
         return ""
     m = _PHONE_RE.search(raw)
     if not m:
         return ""
     digitos = re.sub(r"\D", "", m.group(1))
-    # Asegurar prefijo país.
+    # Quitar prefijo de país (+56 / 56) y ceros iniciales.
     if digitos.startswith("56"):
         digitos = digitos[2:]
     digitos = digitos.lstrip("0")
-    if len(digitos) == 9 and digitos.startswith("9"):
-        return f"+56{digitos}"
+    # Si quedó sin el 9 inicial del celular, agregarlo.
     if len(digitos) == 8:
-        return f"+569{digitos}"
-    return f"+56{digitos}" if digitos else ""
+        digitos = "9" + digitos
+    return digitos
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +266,50 @@ def extraer_direccion_agenda(texto: str) -> str:
             break
 
     direccion = " ".join(partes).strip(" ,")
-    return re.sub(r"\s+", " ", direccion).strip(" ,")
+    direccion = re.sub(r"\s+", " ", direccion).strip(" ,")
+    return _solo_calle_numero(direccion)
+
+
+# Identificadores de la vivienda que SÍ forman parte de la dirección.
+_APT_RE = re.compile(
+    r"\b(depto|dpto|depart\w*|casa|block|blk|torre|piso|oficina)\b", re.IGNORECASE
+)
+# Comuna / ciudad / región / país a eliminar si quedan pegados al final.
+_TAIL_LUGAR = re.compile(
+    r"[,\s]+(chile|tarapac[aá]|atacama|antofagasta|coquimbo|"
+    r"arica y parinacota|regi[oó]n[\w\s.]*|provincia[\w\s.]*|"
+    r"alto hospicio|iquique|copiap[oó]|vallenar|arica)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _solo_calle_numero(direccion: str) -> str:
+    """Conserva calle/pasaje/avenida + numeración (y depto/casa), sin comuna/ciudad.
+
+    Ej: 'El Carmelo 3442, Iquique, Tarapacá, Chile' -> 'El Carmelo 3442'
+        'Gladys Marin 4715-A, Depto 1411, Alto Hospicio, Chile'
+            -> 'Gladys Marin 4715-A, Depto 1411'
+    """
+    if not direccion:
+        return ""
+    segmentos = [s.strip() for s in direccion.split(",") if s.strip()]
+    if not segmentos:
+        return ""
+    # El primer segmento es la calle + número (siempre se conserva).
+    resultado = [segmentos[0]]
+    # Conservar los siguientes solo si son identificador de vivienda (depto/casa…).
+    for seg in segmentos[1:]:
+        if _APT_RE.search(seg):
+            resultado.append(seg)
+        else:
+            break  # a partir de aquí viene comuna/ciudad/región
+    salida = ", ".join(resultado)
+    # Limpieza por si la comuna/ciudad quedó pegada sin coma (OCR).
+    anterior = None
+    while anterior != salida:
+        anterior = salida
+        salida = _TAIL_LUGAR.sub("", salida).strip(" ,")
+    return salida
 
 
 def _anchor_agenda(lineas: list[str]) -> int | None:

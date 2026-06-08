@@ -55,9 +55,9 @@ def test_parse_orden():
 def test_parse_agendamiento():
     datos = parsers.parse_agendamiento(TEXTO_AGENDA)
     assert datos["fecha_agenda"] == "03-06-2026"
-    assert datos["contacto"] == "+56987153787"
+    assert datos["contacto"] == "987153787"          # sin +56
     assert datos["franja"] == "14:00-20:00"
-    assert "El Carmelo 3442" in datos["direccion"]
+    assert datos["direccion"] == "El Carmelo 3442"   # sin comuna/ciudad
     assert "Los Suspiros" not in datos["direccion"]  # no debe tomar la otra dir.
 
 
@@ -139,10 +139,13 @@ def test_orden_ruido_real():
 
 def test_agenda_ruido_real():
     datos = parsers.parse_agendamiento(TEXTO_AGENDA_RUIDO)
-    # No debe confundir con la dirección de Especificaciones ni con el menú.
+    # Calle + número + depto, SIN comuna/ciudad/región ni ruido del menú.
     assert datos["direccion"].startswith("Gladys Marin 4715")
+    assert "Depto 1411" in datos["direccion"]
     assert "|" not in datos["direccion"]
-    assert "Chile" in datos["direccion"]
+    assert "Chile" not in datos["direccion"]
+    assert "Hospicio" not in datos["direccion"]
+    assert datos["contacto"] == "982867679"  # sin +56
     assert datos["nombre"] == "Sonia Mollo Iribarren"
     assert datos["fecha_agenda"] == "03-06-2026"
     assert datos["franja"] == "14:00-20:00"
