@@ -212,7 +212,22 @@ class App(ctk.CTk):
             logger.exception("Error inesperado al procesar")
             self._cola.put(("error", f"Error al procesar: {exc}"))
 
+    def _aviso_login(self) -> None:
+        """Avisa al usuario que se abrirá el navegador (solo si no hay sesión)."""
+        if not self.config_app.token_path.exists():
+            messagebox.showinfo(
+                "Iniciar sesión con Google",
+                "Se abrirá tu navegador para que inicies sesión con tu cuenta de "
+                "Google y autorices el acceso a la planilla.\n\n"
+                "• Elige tu cuenta de Gmail.\n"
+                "• Si aparece 'Google no verificó esta app', pulsa "
+                "\"Configuración avanzada\" → \"Ir a … (no seguro)\".\n"
+                "• Acepta el acceso.\n\n"
+                "Esto solo se pide la primera vez en este equipo.",
+            )
+
     def _on_probar_conexion(self) -> None:
+        self._aviso_login()
         self._set_ocupado(True, "Probando conexión con Google Sheets…")
         threading.Thread(target=self._worker_probar, daemon=True).start()
 
@@ -247,6 +262,7 @@ class App(ctk.CTk):
             if not seguir:
                 return
 
+        self._aviso_login()
         self._set_ocupado(True, "Enviando a Google Sheets…")
         threading.Thread(
             target=self._worker_enviar, args=(solicitudes,), daemon=True

@@ -79,10 +79,29 @@ class SheetsClient:
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(self._credentials_path), _SCOPES
             )
-            creds = flow.run_local_server(port=0, prompt="consent")
+            creds = flow.run_local_server(
+                port=0,
+                prompt="consent",
+                authorization_prompt_message=(
+                    "Se abrió tu navegador para iniciar sesión con tu cuenta de "
+                    "Google. Si no se abre, copia este enlace:\n{url}"
+                ),
+                success_message=(
+                    "¡Listo! Ya iniciaste sesión. Puedes cerrar esta pestaña y "
+                    "volver a la aplicación."
+                ),
+            )
         except Exception as exc:  # noqa: BLE001
+            mensaje = str(exc)
+            if "access_denied" in mensaje or "403" in mensaje:
+                raise SheetsError(
+                    "Google bloqueó el acceso (access_denied). Esto ocurre cuando "
+                    "la app está en modo 'Prueba' y tu correo no está autorizado. "
+                    "Pídele al administrador que publique la app en 'Producción' "
+                    "en Google Cloud (Pantalla de consentimiento de OAuth)."
+                ) from exc
             raise SheetsError(
-                f"Falló la autorización con Google: {exc}"
+                f"No se pudo iniciar sesión con Google: {mensaje}"
             ) from exc
         self._guardar_token(creds)
         return creds
