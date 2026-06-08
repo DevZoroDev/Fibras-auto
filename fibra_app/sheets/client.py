@@ -17,8 +17,6 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from gspread.exceptions import APIError, SpreadsheetNotFound, WorksheetNotFound
 
-from ..config import SHEET_COLUMNS
-
 logger = logging.getLogger(__name__)
 
 # Solo se solicita acceso a hojas de cálculo (consentimiento mínimo).
@@ -37,7 +35,7 @@ class SheetsClient:
         credentials_path: Path,
         token_path: Path,
         sheet_id: str,
-        worksheet_name: str,
+        worksheet_name: str | None = None,
     ) -> None:
         self._credentials_path = credentials_path
         self._token_path = token_path
@@ -103,48 +101,45 @@ class SheetsClient:
         return self._client
 
     # ------------------------------------------------------------- planilla
-    def _worksheet(self) -> gspread.Worksheet:
+    def _spreadsheet(self):
         client = self._connect()
         try:
-            spreadsheet = client.open_by_key(self._sheet_id)
+            return client.open_by_key(self._sheet_id)
         except SpreadsheetNotFound as exc:
             raise SheetsError(
-                "No se encontró la planilla. Verifica GOOGLE_SHEET_ID y que tu "
-                "cuenta de Google tenga acceso de edición a ella."
+                "No se encontró la planilla. Verifica el ID y que tu cuenta de "
+                "Google tenga acceso de edición a ella."
             ) from exc
         except APIError as exc:
             raise SheetsError(f"Error de la API de Google: {exc}") from exc
 
+    def _worksheet(self, worksheet_name: str | None = None) -> gspread.Worksheet:
+        nombre = worksheet_name or self._worksheet_name
+        if not nombre:
+            raise SheetsError("No se indicó la pestaña (ciudad) de destino.")
         try:
-            return spreadsheet.worksheet(self._worksheet_name)
+            return self._spreadsheet().worksheet(nombre)
         except WorksheetNotFound as exc:
             raise SheetsError(
-                f"No existe la pestaña '{self._worksheet_name}' en la planilla."
+                f"No existe la pestaña '{nombre}' en la planilla."
             ) from exc
 
     def probar_conexion(self) -> str:
-        """Verifica acceso y devuelve el título de la planilla."""
-        ws = self._worksheet()
-        return ws.spreadsheet.title
+        """Verifica el acceso a la planilla y devuelve su título."""
+        return self._spreadsheet().title
 
-    def asegurar_encabezados(self) -> None:
-        """Escribe la fila de encabezados si la hoja está vacía."""
-        ws = self._worksheet()
-        try:
-            primera_fila = ws.row_values(1)
-        except APIError as exc:
-            raise SheetsError(f"Error leyendo la planilla: {exc}") from exc
-        if not primera_fila:
-            ws.update("A1", [SHEET_COLUMNS])
-            logger.info("Encabezados escritos en la planilla.")
+    def listar_pestanas(self) -> list[str]:
+        """Devuelve los nombres de todas las pestañas de la planilla."""
+        return [ws.title for ws in self._spreadsheet().worksheets()]
 
-    def agregar_filas(self, filas: list[list[str]]) -> int:
-        """Agrega filas al final de la hoja. Devuelve cuántas se escribieron."""
+    def agregar_filas(
+        self, filas: list[list[str]], worksheet_name: str | None = None
+    ) -> int:
+        """Agrega filas al final de la pestaña indicada (no toca lo existente)."""
         if not filas:
             return 0
-        ws = self._worksheet()
+        ws = self._worksheet(worksheet_name)
         try:
-            self.asegurar_encabezados()
             ws.append_rows(
                 filas,
                 value_input_option="USER_ENTERED",
@@ -155,5 +150,6 @@ class SheetsClient:
             raise SheetsError(
                 f"Error al escribir en Google Sheets: {exc}"
             ) from exc
-        logger.info("Se escribieron %d fila(s) en la planilla.", len(filas))
+        logger.info("Se escribieron %d fila(s) en '%s'.",
+                    len(filas), worksheet_name or self._worksheet_name)
         return len(filas)

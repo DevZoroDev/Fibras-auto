@@ -11,11 +11,13 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 from .. import __version__
-from ..config import AppConfig, ESTADO_FIJO
+from .. import config
+from ..config import CITIES, ESTADO_FIJO, AppConfig
 from ..core import files, processor
 from ..core.models import Solicitud
 from ..ocr import engine
 from ..sheets.client import SheetsClient, SheetsError
+from .config_dialog import ConfigDialog
 from .ejecutivos_dialog import EjecutivosDialog
 from .preview_table import PreviewTable
 
@@ -80,6 +82,19 @@ class App(ctk.CTk):
         )
         self.btn_procesar.grid(row=1, column=2, padx=(8, 12), pady=(0, 12))
 
+        # Selector de ciudad (define a qué pestaña se escriben las solicitudes).
+        ctk.CTkLabel(top, text="Ciudad:").grid(
+            row=2, column=0, padx=(12, 8), pady=(0, 12), sticky="w"
+        )
+        self.menu_ciudad = ctk.CTkOptionMenu(
+            top, values=list(CITIES.keys()), command=self._on_ciudad_cambiada
+        )
+        self.menu_ciudad.set(self.config_app.ciudad)
+        self.menu_ciudad.grid(row=2, column=1, padx=8, pady=(0, 12), sticky="w")
+        ctk.CTkButton(
+            top, text="⚙ Configuración", width=150, command=self._abrir_configuracion
+        ).grid(row=2, column=2, padx=(8, 12), pady=(0, 12))
+
         # --- Estado / progreso ---
         estado = ctk.CTkFrame(self, fg_color="transparent")
         estado.grid(row=1, column=0, padx=16, sticky="ew")
@@ -138,6 +153,24 @@ class App(ctk.CTk):
         self.lbl_estado.configure(
             text=f"Lista de ejecutivos actualizada ({len(dialog.resultado)})."
         )
+
+    def _on_ciudad_cambiada(self, ciudad: str) -> None:
+        self.config_app.ciudad = ciudad
+        config.save_user_settings(ciudad=ciudad)
+        self.lbl_estado.configure(text=f"Ciudad de destino: {ciudad}")
+
+    def _abrir_configuracion(self) -> None:
+        dialog = ConfigDialog(
+            self, self.config_app.sheet_id, self.config_app.token_path
+        )
+        self.wait_window(dialog)
+        self.config_app.sheet_id = dialog.sheet_id
+        if dialog.cuenta_reiniciada:
+            self.lbl_estado.configure(
+                text="Sesión de Google cerrada. Se pedirá login al conectar."
+            )
+        else:
+            self.lbl_estado.configure(text="Configuración actualizada.")
 
     def _on_procesar(self) -> None:
         ruta_txt = self.entry_carpeta.get().strip()
@@ -223,11 +256,12 @@ class App(ctk.CTk):
         try:
             cliente = self._crear_cliente()
             ejecutivo = self.menu_ejecutivo.get()
+            ciudad = CITIES[self.config_app.ciudad]
             filas = [
-                s.to_row(self.config_app.tienda, ejecutivo, ESTADO_FIJO)
+                s.to_row(ciudad, ejecutivo, ESTADO_FIJO)
                 for s in solicitudes
             ]
-            escritas = cliente.agregar_filas(filas)
+            escritas = cliente.agregar_filas(filas, worksheet_name=ciudad.worksheet)
 
             # Mover imágenes procesadas tras escritura exitosa.
             movidas = 0
@@ -250,7 +284,6 @@ class App(ctk.CTk):
             credentials_path=self.config_app.credentials_path,
             token_path=self.config_app.token_path,
             sheet_id=self.config_app.sheet_id,
-            worksheet_name=self.config_app.worksheet_name,
         )
 
     def _set_ocupado(self, ocupado: bool, mensaje: str = "") -> None:

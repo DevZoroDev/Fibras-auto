@@ -112,13 +112,22 @@ python run.py
 
 1. **Selecciona la carpeta** donde descargaste las capturas de WhatsApp.
 2. **Elige el ejecutivo** (se aplica a todas las filas del lote).
-3. Pulsa **Procesar Solicitudes**. La app hace OCR, empareja capturas por RUT y
+3. **Elige la ciudad** de destino (IQUIQUE, ARICA I, ALTO HOSPICIO, COPIAPÓ o
+   VALLENAR). Cada ciudad escribe en su propia pestaña, respetando su orden de
+   columnas particular.
+4. Pulsa **Procesar Solicitudes**. La app hace OCR, empareja capturas por RUT y
    llena la tabla.
-4. **Revisa y corrige** los campos en la vista previa. Los campos no detectados
+5. **Revisa y corrige** los campos en la vista previa. Los campos no detectados
    aparecen con borde rojo.
-5. (Opcional) Pulsa **Probar conexión** para verificar el acceso a Sheets.
-6. Pulsa **Enviar a Google Sheets**. Tras una carga exitosa, las imágenes se
+6. (Opcional) Pulsa **Probar conexión** para verificar el acceso a Sheets.
+7. Pulsa **Enviar a Google Sheets**. Tras una carga exitosa, las imágenes se
    mueven a la subcarpeta **`/Procesadas`** para no reprocesarlas.
+
+### Botón ⚙ Configuración
+- **Enlazar planilla**: pega el enlace o ID de la planilla y guárdalo (queda en
+  `config_local.json`, sin tocar el `.env`).
+- **Cambiar cuenta de Google**: cierra la sesión actual; la próxima conexión
+  abrirá el navegador para iniciar sesión con otra cuenta.
 
 ---
 

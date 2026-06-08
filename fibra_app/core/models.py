@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..config import CityConfig
 
 
 @dataclass
@@ -28,27 +32,32 @@ class Solicitud:
     imagenes: list[Path] = field(default_factory=list)
     advertencias: list[str] = field(default_factory=list)
 
-    def to_row(self, tienda: str, ejecutivo: str, estado: str) -> list[str]:
-        """Convierte la solicitud en una fila alineada a las columnas A..L.
+    def to_row(self, city: "CityConfig", ejecutivo: str, estado: str) -> list[str]:
+        """Convierte la solicitud en una fila según el mapeo de columnas de la ciudad.
 
-        Las columnas M..P (Motivo, Fecha Reagendada, etc.) no se escriben: la
-        fila tiene 12 valores y se inserta desde la columna A, dejando intactas
-        las columnas posteriores.
+        Cada ciudad tiene su propio orden de columnas; los campos se colocan en
+        su índice correcto y las columnas no usadas (PRODUCTO, SERIE,
+        CONTACTO 2…) quedan vacías. La fila abarca hasta la columna ESTADO,
+        dejando intactas las columnas posteriores.
         """
-        return [
-            tienda,             # A  Tienda
-            self.fecha_venta,   # B  Fecha Venta
-            ejecutivo,          # C  Ejecutivo
-            self.orden,         # D  Orden
-            self.nombre,        # E  Nombre
-            self.rut,           # F  Rut
-            self.direccion,     # G  Dirección
-            self.fecha_agenda,  # H  Fecha Agenda
-            self.contacto,      # I  Contacto 1
-            "",                 # J  Contacto 2 (no se extrae)
-            self.franja,        # K  Franja
-            estado,             # L  Estado
-        ]
+        valores = {
+            "tienda": city.tienda,
+            "fecha_venta": self.fecha_venta,
+            "ejecutivo": ejecutivo,
+            "orden": self.orden,
+            "nombre": self.nombre,
+            "rut": self.rut,
+            "direccion": self.direccion,
+            "fecha_agenda": self.fecha_agenda,
+            "contacto": self.contacto,
+            "franja": self.franja,
+            "estado": estado,
+        }
+        n = max(city.columnas.values()) + 1
+        fila = [""] * n
+        for campo, idx in city.columnas.items():
+            fila[idx] = valores.get(campo, "")
+        return fila
 
     def campos_faltantes(self) -> list[str]:
         """Lista de campos obligatorios que están vacíos."""

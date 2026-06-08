@@ -2,6 +2,7 @@
 .env
 credentials.json
 token.json
+config_local.json
 
 # Respaldos generados al reparar fórmulas
 backup_*.json
